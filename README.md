@@ -97,3 +97,27 @@ go programming tools
    
    ```
 
+
+
+3. ### ssh
+
+   SSH client based on websocket. The SSH Connection code comes from [kubekey]([kubesphere/kubekey: Provides a flexible, rapid and convenient way to install Kubernetes only, both Kubernetes and KubeSphere, and related cloud-native add-ons. It is also an efficient tool to scale and upgrade your cluster. (github.com)](https://github.com/kubesphere/kubekey))
+
+   ```go
+   connection, err := ssh.NewConnection(ssh.Cfg{
+   	Username: "root",
+   	Password: "...your password",
+   	Address:  "...your ssh address",
+   	Port:     22,
+   })
+   if err != nil {
+   	return
+   }
+   
+   if err = connection.SshClient(c); err != nil {
+   	//api.BadRequest(c, err)
+   	return
+   }
+   ```
+
+   
