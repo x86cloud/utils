@@ -78,17 +78,17 @@ type connection struct {
 }
 
 func validateOptions(cfg Cfg) (Cfg, error) {
-	if len(cfg.Username) == 0 {
-		return cfg, errors.New("No username specified for SSH connection")
-	}
+	//if len(cfg.Username) == 0 {
+	//	return cfg, errors.New("No username specified for SSH connection")
+	//}
 
 	if len(cfg.Address) == 0 {
 		return cfg, errors.New("No address specified for SSH connection")
 	}
 
-	if len(cfg.Password) == 0 && len(cfg.PrivateKey) == 0 && len(cfg.KeyFile) == 0 && len(cfg.AgentSocket) == 0 {
-		return cfg, errors.New("Must specify at least one of password, private key, keyfile or agent socket")
-	}
+	//if len(cfg.Password) == 0 && len(cfg.PrivateKey) == 0 && len(cfg.KeyFile) == 0 && len(cfg.AgentSocket) == 0 {
+	//	return cfg, errors.New("Must specify at least one of password, private key, keyfile or agent socket")
+	//}
 
 	if len(cfg.KeyFile) > 0 {
 		content, err := ioutil.ReadFile(cfg.KeyFile)
