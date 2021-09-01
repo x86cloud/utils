@@ -17,7 +17,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -50,7 +50,7 @@ type HostCfg struct {
 }
 
 type Connection interface {
-	SshClient(c *gin.Context) error
+	SSHClient(reader io.ReadWriter, opts ...ClientSettingFunc) error
 	Exec(cmd string, host *HostCfg) (stdout string, err error)
 	Scp(src, dst string) error
 }
@@ -78,17 +78,17 @@ type connection struct {
 }
 
 func validateOptions(cfg Cfg) (Cfg, error) {
-	//if len(cfg.Username) == 0 {
-	//	return cfg, errors.New("No username specified for SSH connection")
-	//}
+	if len(cfg.Username) == 0 {
+		return cfg, errors.New("No username specified for SSH connection")
+	}
 
 	if len(cfg.Address) == 0 {
 		return cfg, errors.New("No address specified for SSH connection")
 	}
 
-	//if len(cfg.Password) == 0 && len(cfg.PrivateKey) == 0 && len(cfg.KeyFile) == 0 && len(cfg.AgentSocket) == 0 {
-	//	return cfg, errors.New("Must specify at least one of password, private key, keyfile or agent socket")
-	//}
+	if len(cfg.Password) == 0 && len(cfg.PrivateKey) == 0 && len(cfg.KeyFile) == 0 && len(cfg.AgentSocket) == 0 {
+		return cfg, errors.New("Must specify at least one of password, private key, keyfile or agent socket")
+	}
 
 	if len(cfg.KeyFile) > 0 {
 		content, err := ioutil.ReadFile(cfg.KeyFile)
@@ -286,3 +286,62 @@ func (c *connection) session() (*ssh.Session, error) {
 
 	return c.sshclient.NewSession()
 }
+
+
+type ClientSetting struct {
+	Height,Width int
+}
+
+type ClientSettingFunc func(*ClientSetting)
+
+type ResizeEvent interface {
+	io.ReadWriter
+	ResizeEvent(session *ssh.Session)
+}
+
+func (con *connection) SSHClient(handler io.ReadWriter, opts ...ClientSettingFunc) error {
+	setting := &ClientSetting{
+		Height: 50,
+		Width:  180,
+	}
+	if len(opts) != 0 {
+		for _, opt := range opts {
+			opt(setting)
+		}
+	}
+
+	session, err := con.session()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	session.Stdin = handler
+	session.Stdout = handler
+	session.Stderr = handler
+
+	if h, ok := handler.(ResizeEvent); ok {
+		h.ResizeEvent(session)
+	}
+
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,     // enable echoing
+		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+	}
+
+	if err = session.RequestPty("xterm", setting.Height,  setting.Width, modes); err != nil {
+		return err
+	}
+
+	if err = session.Shell(); err != nil {
+		return err
+	}
+
+	if err = session.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+

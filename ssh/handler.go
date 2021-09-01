@@ -1,40 +1,41 @@
 package ssh
 
 import (
-	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 	"k8s.io/klog/v2"
 )
+type Message struct {
+	Op, Data   string
+	Rows, Cols uint16
+}
+
+type TTYReadWriter interface {
+	Read(m *Message) error
+	Writer(m *Message) error
+}
 
 type TTYHandler struct {
-	ws      *websocket.Conn
-	session *ssh.Session
+	rw TTYReadWriter
 	resize  chan struct{ Cols, Rows uint16 }
-
 	CloseCh chan struct{}
 }
 
-func NewTTYHandler(ws *websocket.Conn, session *ssh.Session) *TTYHandler {
+func NewTTYHandler(rw TTYReadWriter) *TTYHandler {
 	tty := &TTYHandler{
-		ws:      ws,
-		session: session,
+		rw:      rw,
 		CloseCh: make(chan struct{}),
 		resize:  make(chan struct{ Cols, Rows uint16 }),
 	}
-	session.Stdin = tty
-	session.Stdout = tty
-	session.Stderr = tty
-
 	return tty
 }
 
-func (t TTYHandler) ResizeEvent() {
+func (t TTYHandler) ResizeEvent(session *ssh.Session) {
 	go func() {
 		for true {
 			select {
 			case resize := <-t.resize:
-				if err := t.session.WindowChange(int(resize.Rows), int(resize.Cols)); err != nil {
+				if err := session.WindowChange(int(resize.Rows), int(resize.Cols)); err != nil {
 					if err.Error() == "EOF" {
 						return
 					}
@@ -48,15 +49,13 @@ func (t TTYHandler) ResizeEvent() {
 }
 
 func (t TTYHandler) Read(p []byte) (int, error) {
-	msg := Message{}
-
-	err := t.ws.ReadJSON(&msg)
+	msg := &Message{}
+	err := t.rw.Read(msg)
 	if err != nil {
 		return 0, err
 	}
 
 	switch msg.Op {
-
 	case "stdin":
 		return copy(p, msg.Data), nil
 	case "resize":
@@ -68,7 +67,7 @@ func (t TTYHandler) Read(p []byte) (int, error) {
 }
 
 func (t TTYHandler) Write(p []byte) (int, error) {
-	if err := t.ws.WriteJSON(Message{
+	if err := t.rw.Writer(&Message{
 		Op:   "stdout",
 		Data: string(p),
 	}); err != nil {
