@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"time"
 )
 
@@ -84,13 +83,7 @@ func (r *request) SetTimeout(sec time.Duration) *request {
 	return r
 }
 
-func (r *request) Do(model interface{}) (err error) {
-	// check weather
-	rv := reflect.ValueOf(model)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return &json.InvalidUnmarshalError{Type: reflect.TypeOf(model)}
-	}
-
+func (r *request) Do() ([]byte, error) {
 	c := http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: r.tls,
@@ -99,7 +92,7 @@ func (r *request) Do(model interface{}) (err error) {
 	}
 	response, err := c.Do(r.request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		_ = response.Body.Close()
@@ -108,28 +101,14 @@ func (r *request) Do(model interface{}) (err error) {
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(response.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if response.StatusCode >= 400 {
-		return Response{
+		return nil, Response{
 			Code: response.StatusCode,
 			Body: buf.Bytes(),
 		}
 	}
 
-	//自定义数据预处理方法
-	if r.preHandlers != nil {
-		data, err := r.preHandlers.PreHandler(buf.Bytes())
-		if err != nil {
-			return err
-		}
-		if err = json.Unmarshal(data, model); err != nil {
-			return err
-		}
-	} else {
-		if err = json.Unmarshal(buf.Bytes(), model); err != nil {
-			return err
-		}
-	}
-	return nil
+	return buf.Bytes(), nil
 }
