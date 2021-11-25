@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-type PreHandler interface {
-	PreHandler(body []byte) ([]byte, error)
-}
-
 type Response struct {
 	Code int
 	Body []byte
@@ -31,14 +27,7 @@ func (s Response) Error() string {
 	return s.String()
 }
 
-type request struct {
-	tls         *tls.Config
-	request     *http.Request
-	preHandlers PreHandler
-	timeout     time.Duration
-}
-
-func (c *client) Post(body []byte) *request {
+func (c *request) Post(body []byte) *request {
 	buffer := bytes.NewBuffer(body)
 	url := fmt.Sprintf("%s?%s", c.url, c.urlValues.Encode())
 	req, _ := http.NewRequest("POST", url, buffer)
@@ -47,21 +36,21 @@ func (c *client) Post(body []byte) *request {
 	return &request{request: req}
 }
 
-func (c *client) Get() *request {
+func (c *request) Get() *request {
 	url := fmt.Sprintf("%s?%s", c.url, c.urlValues.Encode())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header = c.headers.Clone()
 	return &request{request: req}
 }
 
-func (c *client) Delete() *request {
+func (c *request) Delete() *request {
 	url := fmt.Sprintf("%s?%s", c.url, c.urlValues.Encode())
 	req, _ := http.NewRequest("DELETE", url, nil)
 	req.Header = c.headers.Clone()
 	return &request{request: req}
 }
 
-func (c *client) Put(body []byte) *request {
+func (c *request) Put(body []byte) *request {
 	buffer := bytes.NewBuffer(body)
 	url := fmt.Sprintf("%s?%s", c.url, c.urlValues.Encode())
 	req, _ := http.NewRequest("PUT", url, buffer)
@@ -74,10 +63,6 @@ func (r *request) TLS(tls *tls.Config) *request {
 	return r
 }
 
-func (r *request) AddPreHandler(handler PreHandler) *request {
-	r.preHandlers = handler
-	return r
-}
 func (r *request) SetTimeout(sec time.Duration) *request {
 	r.timeout = sec * time.Second
 	return r
@@ -109,6 +94,5 @@ func (r *request) Do() ([]byte, error) {
 			Body: buf.Bytes(),
 		}
 	}
-
 	return buf.Bytes(), nil
 }
